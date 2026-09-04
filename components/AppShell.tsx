@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Boxes, FileSpreadsheet, FileText, LayoutDashboard, Settings, Truck, Users } from 'lucide-react'
+import { Boxes, FileSpreadsheet, FileText, Image, LayoutDashboard, Settings, Truck, Users } from 'lucide-react'
 
 const nav = [
   ['Dashboard', '/dashboard', LayoutDashboard],
@@ -8,6 +8,7 @@ const nav = [
   ['Proveedores', '/proveedores', Truck],
   ['Clientes', '/clientes', Users],
   ['Presupuestos', '/presupuestos', FileText],
+  ['Publicaciones', '/publicaciones', Image],
   ['Ajustes', '/ajustes', Settings],
 ] as const
 
@@ -36,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/presupuestos/nuevo" className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">+ Nuevo presupuesto</Link>
         </header>
         <div className="p-4 pb-24 md:p-8">{children}</div>
-        <nav className="fixed bottom-0 left-0 right-0 z-20 grid grid-cols-7 border-t bg-white md:hidden">
+        <nav className="fixed bottom-0 left-0 right-0 z-20 grid grid-cols-8 border-t bg-white md:hidden">
           {nav.map(([label, href, Icon]) => (
             <Link key={href} href={href} className="flex flex-col items-center gap-1 px-1 py-2 text-[9px] text-slate-700">
               <Icon size={17} /> {label}
