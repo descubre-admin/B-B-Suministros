@@ -32,6 +32,10 @@ export default function ProductosPage() {
   const supabase = useMemo(() => createClient(), [])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const pageSize = 100
   const [loadError, setLoadError] = useState('')
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<Product | null>(null)
@@ -43,17 +47,52 @@ export default function ProductosPage() {
   const [brandSelection, setBrandSelection] = useState('')
   const [selectionMessage, setSelectionMessage] = useState('')
 
-  async function loadProducts() {
+  async function loadProducts(targetPage = page, search = debouncedQuery) {
     setLoading(true)
     setLoadError('')
 
-    const { data, error } = await supabase
+    const from = (targetPage - 1) * pageSize
+    const to = from + pageSize - 1
+    const rawSearch = search.trim()
+    // Permite buscar varios códigos de una sola vez, por ejemplo:
+    // 6845,6847,7275,7277 (también acepta ; o saltos de línea).
+    const multipleTerms = rawSearch
+      .split(/[,;\n]+/)
+      .map((term) => term.trim().replace(/[%()]/g, ' '))
+      .filter(Boolean)
+
+    let request = supabase
       .from('products')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('name', { ascending: true })
+      .range(from, to)
+
+    if (multipleTerms.length > 1) {
+      // En búsquedas múltiples hacemos OR entre todos los códigos/textos.
+      // Así los resultados pueden venir de cualquier parte de la base,
+      // sin depender de la página que estaba visible.
+      const conditions = multipleTerms.flatMap((value) => {
+        const term = `%${value}%`
+        return [
+          `sku.ilike.${term}`,
+          `name.ilike.${term}`,
+          `brand.ilike.${term}`,
+          `category.ilike.${term}`,
+        ]
+      })
+      request = request.or(conditions.join(','))
+    } else if (multipleTerms.length === 1) {
+      const term = `%${multipleTerms[0]}%`
+      request = request.or(
+        `name.ilike.${term},brand.ilike.${term},sku.ilike.${term},category.ilike.${term}`
+      )
+    }
+
+    const { data, error, count } = await request
 
     if (error) {
       setProducts([])
+      setTotalCount(0)
       setLoadError(
         [error.message, error.details, error.hint, error.code]
           .filter(Boolean)
@@ -61,14 +100,26 @@ export default function ProductosPage() {
       )
     } else {
       setProducts((data ?? []) as Product[])
+      setTotalCount(count ?? 0)
     }
 
     setLoading(false)
   }
 
   useEffect(() => {
-    void loadProducts()
-  }, [])
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim())
+      setPage(1)
+      setSelectedIds([])
+      setSelectionMessage('')
+    }, 300)
+
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  useEffect(() => {
+    void loadProducts(page, debouncedQuery)
+  }, [page, debouncedQuery])
 
   async function removeProduct(id: string) {
     if (!confirm('¿Eliminar este producto?')) return
@@ -81,21 +132,15 @@ export default function ProductosPage() {
     }
 
     setSelectedIds((current) => current.filter((item) => item !== id))
-    await loadProducts()
+    await loadProducts(page, debouncedQuery)
   }
 
-  const filtered = products.filter((product) => {
-    const text = [
-      product.name,
-      product.brand ?? '',
-      product.sku ?? '',
-      product.category ?? '',
-    ]
-      .join(' ')
-      .toLowerCase()
-
-    return text.includes(query.trim().toLowerCase())
-  })
+  // La búsqueda se hace en Supabase para encontrar también productos
+  // que estén más allá de los primeros 1000 registros.
+  const filtered = products
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const firstVisibleNumber = totalCount === 0 ? 0 : (page - 1) * pageSize + 1
+  const lastVisibleNumber = Math.min(page * pageSize, totalCount)
 
   const selectedProducts = products.filter((product) =>
     selectedIds.includes(product.id)
@@ -189,7 +234,7 @@ export default function ProductosPage() {
   function selectAllFiltered() {
     addSelection(visibleIds)
     setSelectionMessage(
-      `Se seleccionaron los ${visibleIds.length} productos visibles.`
+      `Se seleccionaron los ${visibleIds.length} productos de esta página.`
     )
   }
 
@@ -238,9 +283,20 @@ export default function ProductosPage() {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar por producto, marca, código o categoría..."
+          placeholder="Buscar por producto, marca o código. Varios códigos: 6845,6847,7275,7277"
           className="w-full rounded-xl border bg-white px-4 py-3 outline-none focus:border-brand-500"
         />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+        <div>
+          {loading
+            ? 'Buscando productos…'
+            : totalCount > 0
+              ? `Mostrando ${firstVisibleNumber}-${lastVisibleNumber} de ${totalCount} productos`
+              : '0 productos'}
+        </div>
+        <div className="font-medium text-slate-600">100 productos por página</div>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -258,7 +314,7 @@ export default function ProductosPage() {
           disabled={filtered.length === 0}
           className="rounded-xl border bg-white px-3 py-2 text-sm font-medium disabled:opacity-50"
         >
-          Seleccionar todos los resultados ({filtered.length})
+          Seleccionar página actual ({filtered.length})
         </button>
       </div>
 
@@ -267,7 +323,7 @@ export default function ProductosPage() {
           <div>
             <h2 className="text-lg font-semibold">Selección avanzada</h2>
             <p className="mt-1 text-sm text-slate-500">
-              La numeración corresponde a la lista actualmente filtrada.
+              La numeración corresponde a la página actual (hasta 100 productos).
             </p>
           </div>
 
@@ -304,7 +360,7 @@ export default function ProductosPage() {
             <div className="rounded-xl border bg-slate-50 p-4">
               <div className="font-semibold">Seleccionar por marca</div>
               <p className="mt-1 text-xs text-slate-500">
-                Solo toma productos de la lista filtrada actual.
+                Solo toma productos de la página actual.
               </p>
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -338,7 +394,7 @@ export default function ProductosPage() {
               disabled={filtered.length === 0}
               className="rounded-xl border px-3 py-2 text-sm font-medium disabled:opacity-50"
             >
-              Seleccionar todos los resultados ({filtered.length})
+              Seleccionar página actual ({filtered.length})
             </button>
 
             {selectedIds.length > 0 && (
@@ -423,7 +479,7 @@ export default function ProductosPage() {
             onApplied={async () => {
               setShowBulkEditor(false)
               setSelectedIds([])
-              await loadProducts()
+              await loadProducts(page, debouncedQuery)
             }}
           />
         </div>
@@ -440,7 +496,7 @@ export default function ProductosPage() {
             onSaved={async () => {
               setShowForm(false)
               setEditing(null)
-              await loadProducts()
+              await loadProducts(page, debouncedQuery)
             }}
           />
         </div>
@@ -513,7 +569,7 @@ export default function ProductosPage() {
                             className="h-4 w-4 rounded border-slate-300"
                           />
                         </td>
-                        <td className="p-3 font-medium text-slate-500">{index + 1}</td>
+                        <td className="p-3 font-medium text-slate-500">{(page - 1) * pageSize + index + 1}</td>
                         <td className="p-3">
                           <div className="font-medium">{product.name}</div>
                           <div className="text-xs text-slate-500">
@@ -573,7 +629,7 @@ export default function ProductosPage() {
                         className="mt-1 h-4 w-4 rounded border-slate-300"
                       />
                       <div className="flex-1">
-                        <div className="mb-1 text-xs font-semibold text-slate-400">N° {index + 1}</div>
+                        <div className="mb-1 text-xs font-semibold text-slate-400">N° {(page - 1) * pageSize + index + 1}</div>
                         <div className="font-semibold">{product.name}</div>
                         <div className="mt-0.5 text-xs text-slate-500">
                           {[product.brand, product.sku, product.category]
@@ -629,6 +685,66 @@ export default function ProductosPage() {
                 )
               })}
             </div>
+
+            {totalPages > 1 && (
+              <div className="mt-5 flex flex-col gap-3 rounded-2xl border bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-slate-600">
+                  Página <span className="font-semibold text-slate-900">{page}</span> de{' '}
+                  <span className="font-semibold text-slate-900">{totalPages}</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedIds([])
+                      setSelectionMessage('')
+                      setPage(1)
+                    }}
+                    disabled={page === 1 || loading}
+                    className="rounded-xl border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Primera
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedIds([])
+                      setSelectionMessage('')
+                      setPage((current) => Math.max(1, current - 1))
+                    }}
+                    disabled={page === 1 || loading}
+                    className="rounded-xl border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedIds([])
+                      setSelectionMessage('')
+                      setPage((current) => Math.min(totalPages, current + 1))
+                    }}
+                    disabled={page === totalPages || loading}
+                    className="rounded-xl border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Siguiente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedIds([])
+                      setSelectionMessage('')
+                      setPage(totalPages)
+                    }}
+                    disabled={page === totalPages || loading}
+                    className="rounded-xl border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Última
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )
       )}

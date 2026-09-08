@@ -419,23 +419,44 @@ export default function SocialPostGenerator() {
 
   useEffect(() => {
     let cancelled = false
+
     async function loadProducts() {
       setProductsLoading(true)
       setProductsError('')
-      const { data, error } = await supabase
-        .from('products')
-        .select('id,name,brand,sku,sale_price')
-        .eq('active', true)
-        .order('name')
-      if (cancelled) return
-      if (error) {
-        setProductsError('No se pudo cargar la lista de productos.')
-        setProducts([])
-      } else {
-        setProducts((data ?? []) as ProductOption[])
+
+      const pageSize = 500
+      let from = 0
+      const allProducts: ProductOption[] = []
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id,name,brand,sku,sale_price')
+          .order('name', { ascending: true })
+          .range(from, from + pageSize - 1)
+
+        if (cancelled) return
+
+        if (error) {
+          setProductsError('No se pudo cargar la lista completa de productos.')
+          setProducts([])
+          setProductsLoading(false)
+          return
+        }
+
+        const batch = (data ?? []) as ProductOption[]
+        allProducts.push(...batch)
+
+        if (batch.length < pageSize) break
+        from += pageSize
       }
-      setProductsLoading(false)
+
+      if (!cancelled) {
+        setProducts(allProducts)
+        setProductsLoading(false)
+      }
     }
+
     void loadProducts()
     return () => {
       cancelled = true
@@ -449,13 +470,26 @@ export default function SocialPostGenerator() {
   }, [])
 
   const filteredProducts = (query: string) => {
-    const normalized = query.trim().toLowerCase()
-    if (!normalized) return []
+    const normalizedText = query.trim().toLowerCase()
+    const normalizedCode = query.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+    if (!normalizedText) return []
+
     return products
-      .filter((product) =>
-        `${product.name} ${product.brand ?? ''} ${product.sku ?? ''}`.toLowerCase().includes(normalized),
-      )
-      .slice(0, 8)
+      .filter((product) => {
+        const sku = String(product.sku ?? '')
+        const skuNormalized = sku.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+        const searchable = `${product.name} ${product.brand ?? ''} ${sku}`.toLowerCase()
+        return searchable.includes(normalizedText) ||
+          Boolean(normalizedCode && skuNormalized.includes(normalizedCode))
+      })
+      .sort((a, b) => {
+        const aSku = String(a.sku ?? '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+        const bSku = String(b.sku ?? '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+        const aExact = normalizedCode && aSku === normalizedCode ? 1 : 0
+        const bExact = normalizedCode && bSku === normalizedCode ? 1 : 0
+        return bExact - aExact || a.name.localeCompare(b.name, 'es')
+      })
+      .slice(0, 12)
   }
 
   useEffect(() => {
@@ -709,7 +743,7 @@ export default function SocialPostGenerator() {
         <>
           <div className="flex items-center rounded-xl border bg-white px-3 focus-within:border-red-400 focus-within:ring-2 focus-within:ring-red-100">
             <Search size={18} className="shrink-0 text-slate-400" />
-            <input id={id} value={query} onChange={(e) => onQueryChange(e.target.value)} placeholder="Buscar nombre, marca o SKU..." className="w-full bg-transparent px-2 py-3 text-sm outline-none" />
+            <input id={id} value={query} onChange={(e) => onQueryChange(e.target.value)} placeholder="Buscar por código, nombre o marca..." className="w-full bg-transparent px-2 py-3 text-sm outline-none" />
           </div>
           {query.trim() && (
             <div className="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow-xl">
