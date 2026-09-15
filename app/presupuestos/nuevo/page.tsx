@@ -10,6 +10,8 @@ const money = (n:number) => new Intl.NumberFormat('es-AR', { style:'currency', c
 type Product = { id:string; name:string; brand:string|null; sale_price:number; sku:string|null }
 type Customer = { id:string; name:string; phone:string|null; city:string|null }
 type Item = { product:Product; qty:number; unitPrice:number }
+type DraftQuoteItem = { productId:string; name:string; brand:string|null; sku:string|null; qty:number; unitPrice:number }
+const DRAFT_KEY = 'bb_quote_draft_items'
 type Settings = { business_name:string|null; phone:string|null; address:string|null; city:string|null; quote_validity_hours:number|null }
 
 export default function NewQuotePage() {
@@ -29,10 +31,39 @@ export default function NewQuotePage() {
       supabase.from('customers').select('id,name,phone,city').order('name'),
       supabase.from('settings').select('business_name,phone,address,city,quote_validity_hours').maybeSingle(),
     ])
-    setProducts((p ?? []) as Product[]); setCustomers((c ?? []) as Customer[]); if(s)setSettings(s as Settings)
-  })() },[])
+    const loadedProducts=(p ?? []) as Product[]
+    setProducts(loadedProducts); setCustomers((c ?? []) as Customer[]); if(s)setSettings(s as Settings)
 
-  const filtered = products.filter(p => `${p.name} ${p.brand??''} ${p.sku ?? ''}`.toLowerCase().includes(query.toLowerCase())).slice(0,8)
+    try {
+      const draft=JSON.parse(localStorage.getItem(DRAFT_KEY) || '[]') as DraftQuoteItem[]
+      if(Array.isArray(draft) && draft.length){
+        const draftItems:Item[] = draft.map(d=>{
+          const found=loadedProducts.find(product=>product.id===d.productId)
+          const product:Product = found ?? { id:d.productId, name:d.name, brand:d.brand, sku:d.sku, sale_price:d.unitPrice }
+          return { product, qty:Number(d.qty)||1, unitPrice:Number(d.unitPrice)||0 }
+        })
+        setItems(prev=>{
+          const next=[...prev]
+          draftItems.forEach(item=>{
+            const ix=next.findIndex(existing=>existing.product.id===item.product.id)
+            if(ix>=0) next[ix]={...next[ix],qty:next[ix].qty+item.qty,unitPrice:item.unitPrice}
+            else next.push(item)
+          })
+          return next
+        })
+        localStorage.removeItem(DRAFT_KEY)
+      }
+    } catch {
+      localStorage.removeItem(DRAFT_KEY)
+    }
+  })() },[supabase])
+
+  const normalizedQuery=query.toLowerCase().trim().split(/\s+/).filter(Boolean)
+  const filtered = products.filter(p => {
+    if(!normalizedQuery.length)return false
+    const haystack=`${p.name} ${p.brand??''} ${p.sku ?? ''}`.toLowerCase()
+    return normalizedQuery.every(token=>haystack.includes(token))
+  }).slice(0,8)
   const subtotal = useMemo(()=>items.reduce((s,i)=>s+i.qty*i.unitPrice,0),[items])
   const total = Math.max(0, subtotal - discount)
   const customer = customers.find(c=>c.id===customerId)
