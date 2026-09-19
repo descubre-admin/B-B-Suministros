@@ -32,12 +32,34 @@ export default function NewQuotePage() {
   const [editing,setEditing] = useState(false)
 
   useEffect(()=>{ void (async()=>{
-    const [{data:p},{data:c},{data:s}] = await Promise.all([
-      supabase.from('products').select('id,name,brand,sale_price,sku,cost,markup_percent').eq('active',true).order('name'),
+    // Supabase limita por defecto las consultas a una cantidad maxima de filas.
+    // Si el catalogo crece, productos que quedan fuera de ese primer bloque (por
+    // ejemplo "lampara") nunca llegaban al buscador. Cargamos el catalogo
+    // activo completo por paginas para que la busqueda local siempre vea todo.
+    async function loadAllActiveProducts(){
+      const pageSize=1000
+      const all:Product[]=[]
+      for(let from=0;;from+=pageSize){
+        const {data,error}=await supabase
+          .from('products')
+          .select('id,name,brand,sale_price,sku,cost,markup_percent')
+          .eq('active',true)
+          .order('name')
+          .range(from,from+pageSize-1)
+        if(error) throw error
+        const page=(data ?? []) as Product[]
+        all.push(...page)
+        if(page.length<pageSize) break
+      }
+      return all
+    }
+
+    const [p,{data:c},{data:s}] = await Promise.all([
+      loadAllActiveProducts(),
       supabase.from('customers').select('id,customer_number,name,phone,city').order('name'),
       supabase.from('settings').select('business_name,phone,address,city,quote_validity_hours').maybeSingle(),
     ])
-    const loadedProducts=(p ?? []) as Product[]
+    const loadedProducts=p
     const {data:costRows}=await supabase.from('product_supplier_costs').select('product_id,base_price,discount_percent,is_preferred').eq('is_preferred',true)
     const costMap=new Map((costRows??[]).map((r:any)=>[r.product_id,r]))
     const enriched=loadedProducts.map(product=>{const r:any=costMap.get(product.id);return {...product,listPrice:r?Number(r.base_price):Number(product.cost||product.sale_price),supplierDiscount:r?Number(r.discount_percent):0}})
