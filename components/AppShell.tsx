@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Boxes, FileSpreadsheet, FileText, Image, LayoutDashboard, Settings, ShoppingCart, WalletCards, Truck, Users } from 'lucide-react'
+import { Boxes, FileSpreadsheet, FileText, Image, LayoutDashboard, Settings, ShoppingCart, WalletCards, Truck, Users, FileUp } from 'lucide-react'
 
 const nav = [
   ['Dashboard', '/dashboard', LayoutDashboard],
@@ -8,6 +8,7 @@ const nav = [
   ['Proveedores', '/proveedores', Truck],
   ['Clientes', '/clientes', Users],
   ['Presupuestos', '/presupuestos', FileText],
+  ['Importar PDF', '/presupuestos/importar-pdf', FileUp],
   ['Ventas', '/ventas', ShoppingCart],
   ['Cobros', '/cobros', WalletCards],
   ['Publicaciones', '/publicaciones', Image],
