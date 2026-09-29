@@ -19,6 +19,9 @@ export type Product = {
   stock: number | string | null
   active: boolean
   created_at: string
+  description?: string | null
+  image_url?: string | null
+  image_source_url?: string | null
 }
 
 const money = (value: number | string | null | undefined) =>

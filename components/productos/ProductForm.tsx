@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { calculateSupplierCost, PRICING_MODE_LABELS, type PricingMode } from '@/lib/pricing'
+import ProductImagePicker from './ProductImagePicker'
 
 type Product = {
   id: string
@@ -16,6 +17,9 @@ type Product = {
   sale_price: number | string
   stock: number | string | null
   active: boolean
+  description?: string | null
+  image_url?: string | null
+  image_source_url?: string | null
 }
 
 type Supplier = {
@@ -67,6 +71,9 @@ export default function ProductForm({ product, onSaved, onCancel }: Props) {
   const [brand, setBrand] = useState('')
   const [sku, setSku] = useState('')
   const [category, setCategory] = useState('')
+  const [description, setDescription] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [imageSourceUrl, setImageSourceUrl] = useState('')
   const [markup, setMarkup] = useState('20')
   const [salePrice, setSalePrice] = useState('')
   const [stock, setStock] = useState('')
@@ -94,6 +101,9 @@ export default function ProductForm({ product, onSaved, onCancel }: Props) {
       setBrand('')
       setSku('')
       setCategory('')
+      setDescription('')
+      setImageUrl('')
+      setImageSourceUrl('')
       setMarkup('20')
       setSalePrice('')
       setStock('')
@@ -113,6 +123,9 @@ export default function ProductForm({ product, onSaved, onCancel }: Props) {
     setBrand(product.brand ?? '')
     setSku(product.sku ?? '')
     setCategory(product.category ?? '')
+    setDescription(product.description ?? '')
+    setImageUrl(product.image_url ?? '')
+    setImageSourceUrl(product.image_source_url ?? '')
     setMarkup(String(product.markup_percent ?? 20))
     setSalePrice(String(product.sale_price ?? ''))
     setStock(product.stock == null ? '' : String(product.stock))
@@ -199,6 +212,9 @@ export default function ProductForm({ product, onSaved, onCancel }: Props) {
       brand: brand.trim() || null,
       sku: sku.trim() || null,
       category: category.trim() || null,
+      description: description.trim() || null,
+      image_url: imageUrl || null,
+      image_source_url: imageSourceUrl || null,
       cost: calculatedCost,
       markup_percent: markupNumber,
       sale_price: finalSale,
@@ -287,6 +303,10 @@ export default function ProductForm({ product, onSaved, onCancel }: Props) {
         <label className="text-sm font-medium">Categoría
           <input value={category} onChange={(e) => setCategory(e.target.value)} className="mt-1.5 w-full rounded-xl border px-3 py-2.5 font-normal" />
         </label>
+        <label className="text-sm font-medium sm:col-span-2">Descripción
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Modelo, potencia, medida u otros datos útiles para el catálogo y la búsqueda de imágenes" className="mt-1.5 w-full rounded-xl border px-3 py-2.5 font-normal" />
+        </label>
+        <ProductImagePicker productId={product?.id} name={name} brand={brand} sku={sku} description={description} value={imageUrl} sourceUrl={imageSourceUrl} onChange={(url, source='') => { setImageUrl(url); setImageSourceUrl(source) }} />
       </div>
 
       <div className="rounded-2xl border bg-slate-50 p-4">
