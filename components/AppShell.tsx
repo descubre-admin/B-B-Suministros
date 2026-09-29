@@ -1,17 +1,19 @@
 import Link from 'next/link'
-import { Boxes, FileSpreadsheet, FileText, Image, LayoutDashboard, Settings, ShoppingCart, WalletCards, Truck, Users, FileUp } from 'lucide-react'
+import { Boxes, FileSpreadsheet, FileText, Image, LayoutDashboard, Settings, ShoppingCart, WalletCards, Truck, Users, FileUp, BookOpen } from 'lucide-react'
 
 const nav = [
   ['Dashboard', '/dashboard', LayoutDashboard],
   ['Productos', '/productos', Boxes],
   ['Importar', '/productos/importar', FileSpreadsheet],
   ['Proveedores', '/proveedores', Truck],
+  ['Catálogos prov.', '/proveedores/catalogos', FileSpreadsheet],
   ['Clientes', '/clientes', Users],
   ['Presupuestos', '/presupuestos', FileText],
   ['Importar PDF', '/presupuestos/importar-pdf', FileUp],
   ['Ventas', '/ventas', ShoppingCart],
   ['Cobros', '/cobros', WalletCards],
   ['Publicaciones', '/publicaciones', Image],
+  ['Catálogos', '/catalogos', BookOpen],
   ['Ajustes', '/ajustes', Settings],
 ] as const
 
@@ -40,7 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/presupuestos/nuevo" className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">+ Nuevo presupuesto</Link>
         </header>
         <div className="p-4 pb-24 md:p-8">{children}</div>
-        <nav className="fixed bottom-0 left-0 right-0 z-20 grid grid-cols-10 border-t bg-white md:hidden">
+        <nav className="fixed bottom-0 left-0 right-0 z-20 grid grid-cols-11 border-t bg-white md:hidden">
           {nav.map(([label, href, Icon]) => (
             <Link key={href} href={href} className="flex flex-col items-center gap-1 px-1 py-2 text-[9px] text-slate-700">
               <Icon size={17} /> {label}
